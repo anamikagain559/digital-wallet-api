@@ -1,21 +1,23 @@
-const express = require('express');
 import { Server } from 'http';
-
 import mongoose from 'mongoose';
 import app from './app';
-
+import { envVars } from "./config/env";
 
 let server: Server;
-const port = 5000;
+
 
 async function main() {
   try {
 
-    await mongoose.connect('mongodb+srv://anamikagain8:1xvOREUhSh2qWGyq@cluster0.o6amai6.mongodb.net/ture-management-db?retryWrites=true&w=majority&appName=Cluster0');
+   
+      await mongoose.connect(envVars.DB_URL)
+
     console.log('Connected to MongoDB');
-      server = app.listen(port, () => {
-      console.log(`Example app listening on port ${port}`);
-    });
+    
+      server = app.listen(envVars.PORT, () => {
+            console.log(`Server is listening to port ${envVars.PORT}`);
+        });
+
   } catch (error) {
     console.error('Error starting the server:', error);
   }
