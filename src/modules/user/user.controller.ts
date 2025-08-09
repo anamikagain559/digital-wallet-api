@@ -4,24 +4,43 @@ import { NextFunction, Request, Response } from "express";
 import httpStatus from "http-status-codes";
 import { User } from "./user.model";
 import { UserServices } from "./user.service";
+import { sendResponse } from "../../utils/sendResponse";
+import { catchAsync } from "../../utils/catchAsync";
+const createUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const user = await UserServices.createUser(req.body)
 
-const createUser =async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user =await UserServices.createUser(req.body);
+    // res.status(httpStatus.CREATED).json({
+    //     message: "User Created Successfully",
+    //     user
+    // })
 
-        res.status(httpStatus.CREATED).json({
-            message: "User Created Successfully",
-            user    })
-    }
-    catch(err: any) {
-        console.log(err);
-       res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
-            message: "Internal Server Error",
-            error: err.message
-        });
-    }
-}
+    sendResponse(res, {
+        success: true,
+        statusCode: httpStatus.CREATED,
+        message: "User Created Successfully",
+        data: user,
+    })
+})
+
+const getAllUsers = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const result = await UserServices.getAllUsers();
+
+    // res.status(httpStatus.OK).json({
+    //     success: true,
+    //     message: "All Users Retrieved Successfully",
+    //     data: users
+    // })
+    sendResponse(res, {
+        success: true,
+        statusCode: httpStatus.CREATED,
+        message: "All Users Retrieved Successfully",
+        data: result.data,
+        meta: result.meta
+    })
+})
+
 
 export const UserController = {
     createUser,
+    getAllUsers,
 };
