@@ -13,33 +13,19 @@ import { createUserTokens } from "../../utils/userTokens"
 import { AuthServices } from "./auth.service"
 
 const credentialsLogin = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-    // const loginInfo = await AuthServices.credentialsLogin(req.body)
 
     passport.authenticate("local", async (err: any, user: any, info: any) => {
-
+    console.log(err);
         if (err) {
-
-            // ❌❌❌❌❌
-            // throw new AppError(401, "Some error")
-            // next(err)
-            // return new AppError(401, err)
-
-
-            // ✅✅✅✅
-            // return next(err)
-            // console.log("from err");
             return next(new AppError(401, err))
         }
 
         if (!user) {
-            // console.log("from !user");
-            // return new AppError(401, info.message)
+
             return next(new AppError(401, info.message))
         }
 
         const userTokens = await createUserTokens(user)
-
-        // delete user.toObject().password
 
         const { password: pass, ...rest } = user.toObject()
 
@@ -59,16 +45,6 @@ const credentialsLogin = catchAsync(async (req: Request, res: Response, next: Ne
         })
     })(req, res, next)
 
-    // res.cookie("accessToken", loginInfo.accessToken, {
-    //     httpOnly: true,
-    //     secure: false
-    // })
-
-
-    // res.cookie("refreshToken", loginInfo.refreshToken, {
-    //     httpOnly: true,
-    //     secure: false,
-    // })
 
 
 })
@@ -79,10 +55,6 @@ const getNewAccessToken = catchAsync(async (req: Request, res: Response, next: N
     }
     const tokenInfo = await AuthServices.getNewAccessToken(refreshToken as string)
 
-    // res.cookie("accessToken", tokenInfo.accessToken, {
-    //     httpOnly: true,
-    //     secure: false
-    // })
 
     setAuthCookie(res, tokenInfo);
 
@@ -136,7 +108,6 @@ const googleCallbackController = catchAsync(async (req: Request, res: Response, 
         redirectTo = redirectTo.slice(1)
     }
 
-    // /booking => booking , => "/" => ""
     const user = req.user;
 
     if (!user) {
@@ -146,13 +117,6 @@ const googleCallbackController = catchAsync(async (req: Request, res: Response, 
     const tokenInfo = createUserTokens(user)
 
     setAuthCookie(res, tokenInfo)
-
-    // sendResponse(res, {
-    //     success: true,
-    //     statusCode: httpStatus.OK,
-    //     message: "Password Changed Successfully",
-    //     data: null,
-    // })
 
     res.redirect(`${envVars.FRONTEND_URL}/${redirectTo}`)
 })
