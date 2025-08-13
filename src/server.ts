@@ -1,35 +1,32 @@
-import { Server } from 'http';
-import mongoose from 'mongoose';
-import app from './app';
+/* eslint-disable no-console */
+import { Server } from "http";
+import mongoose from "mongoose";
+import app from "./app";
 import { envVars } from "./config/env";
+import { seedSuperAdmin } from "./utils/seedSuperAdmin";
 
 let server: Server;
 
 
-async function main() {
-  try {
+const startServer = async () => {
+    try {
+        await mongoose.connect(envVars.DB_URL)
 
-   
-      await mongoose.connect(envVars.DB_URL)
+        console.log("Connected to DB!!");
 
-    console.log('Connected to MongoDB');
-
-      server = app.listen(envVars.PORT, () => {
+        server = app.listen(envVars.PORT, () => {
             console.log(`Server is listening to port ${envVars.PORT}`);
         });
-
-  } catch (error) {
-    console.error('Error starting the server:', error);
-  }
+    } catch (error) {
+        console.log(error);
+    }
 }
 
-main();
+(async () => {
+    await startServer()
+    await seedSuperAdmin()
+})()
 
-/**  unhandled rejection error
-* uncaugth rejection error
-* signal termination  sigterm
-* 
-*/
 process.on("SIGTERM", () => {
     console.log("SIGTERM signal recieved... Server shutting down..");
 
@@ -86,3 +83,8 @@ process.on("uncaughtException", (err) => {
 // throw new Error("I forgot to handle this local erro")
 
 
+/**
+ * unhandled rejection error
+ * uncaught rejection error
+ * signal termination sigterm
+ */
