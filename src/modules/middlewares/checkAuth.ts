@@ -31,6 +31,8 @@ export const checkAuth = (...authRoles: string[]) => async (req: Request, res: R
             throw new AppError(httpStatus.BAD_REQUEST, "User is deleted")
         }
 
+        console.log("verifiedToken", verifiedToken);
+        console.log(authRoles);
         if (!authRoles.includes(verifiedToken.role)) {
             throw new AppError(403, "You are not permitted to view this route!!!")
         }
