@@ -1,93 +1,242 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Wallet } from "./wallet.model";
-import mongoose from "mongoose";
+import mongoose, { ClientSession } from "mongoose";
+import { WalletModel } from "./wallet.model";
+import { TransactionModel } from "../transaction/transaction.model";
+import { TransactionStatus, TransactionType } from "../transaction/transaction.constant";
+import { MIN_BALANCE, WalletStatus, TRANSFER_FEE_PERCENT, WITHDRAW_FEE_PERCENT } from "./wallet.constant";
+import AppError from "../../errorHelpers/AppError";
 
-const createWallet = async (payload: any) => {
-  const wallet = await Wallet.create(payload);
-  return wallet;
-};
-
-const getMyWallet = async (userId: string) => {
-  const wallet = await Wallet.findOne({ owner: userId });
-  if (!wallet) {
-    throw new Error("Wallet not found");
+const ensureActive = (status: WalletStatus) => {
+  if (status !== WalletStatus.ACTIVE) {
+    throw new AppError(403, "Wallet is blocked");
   }
-  return wallet;
 };
 
-const getAllWallets = async () => {
-  const wallets = await Wallet.find();
-  return wallets;
-};
-
-const addMoney = async (walletId: string, amount: number) => {
-  if (amount <= 0) throw new Error("Amount must be positive");
-
-  const wallet = await Wallet.findById(walletId);
-  if (!wallet) throw new Error("Wallet not found");
-
-  wallet.balance += amount;
-  await wallet.save();
-
-  return wallet;
-};
-
-const withdrawMoney = async (walletId: string, amount: number) => {
-  if (amount <= 0) throw new Error("Amount must be positive");
-
-  const wallet = await Wallet.findById(walletId);
-  if (!wallet) throw new Error("Wallet not found");
-  if (wallet.balance < amount) throw new Error("Insufficient balance");
-
-  wallet.balance -= amount;
-  await wallet.save();
-
-  return wallet;
-};
-
-const transferMoney = async (fromWalletId: string, toWalletId: string, amount: number) => {
-  if (amount <= 0) throw new Error("Amount must be positive");
-  if (fromWalletId === toWalletId) throw new Error("Cannot transfer to the same wallet");
-
+const withSession = async <T>(fn: (session: ClientSession) => Promise<T>): Promise<T> => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
-    const fromWallet = await Wallet.findById(fromWalletId).session(session);
-    const toWallet = await Wallet.findById(toWalletId).session(session);
-
-    if (!fromWallet || !toWallet) throw new Error("Wallet not found");
-    if (fromWallet.balance < amount) throw new Error("Insufficient balance");
-
-    fromWallet.balance -= amount;
-    toWallet.balance += amount;
-
-    await fromWallet.save({ session });
-    await toWallet.save({ session });
-
+    const result = await fn(session);
     await session.commitTransaction();
-    session.endSession();
-
-    return { fromWallet, toWallet };
-  } catch (error) {
+    return result;
+  } catch (e) {
     await session.abortTransaction();
-    session.endSession();
-    throw error;
+    throw e;
+  } finally {
+    await session.endSession();
   }
 };
 
-const deleteWallet = async (walletId: string) => {
-  const result = await Wallet.findByIdAndDelete(walletId);
-  if (!result) throw new Error("Wallet not found");
-  return result;
-};
+export const WalletService = {
+  async createWallet(userId: string) {
+    const exists = await WalletModel.findOne({ user: userId });
+    if (exists) throw new AppError(400, "Wallet already exists");
 
-export const walletService = {
-  createWallet,
-  getMyWallet,
-  getAllWallets,
-  addMoney,
-  withdrawMoney,
-  transferMoney,
-  deleteWallet,
+    return await WalletModel.create({
+      user: new mongoose.Types.ObjectId(userId),
+      balance: 50,
+      status: WalletStatus.ACTIVE,
+    });
+  },
+
+  async getWalletByUserId(userId: string) {
+    const wallet = await WalletModel.findOne({ user: userId });
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async updateWalletBalance(userId: string, amount: number) {
+    const wallet = await WalletModel.findOneAndUpdate(
+      { user: userId },
+      { $inc: { balance: amount } },
+      { new: true }
+    );
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async blockWallet(walletId: string) {
+    const wallet = await WalletModel.findByIdAndUpdate(
+      walletId,
+      { status: WalletStatus.BLOCKED },
+      { new: true }
+    );
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async unblockWallet(walletId: string) {
+    const wallet = await WalletModel.findByIdAndUpdate(
+      walletId,
+      { status: WalletStatus.ACTIVE },
+      { new: true }
+    );
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async deleteWallet(walletId: string) {
+    const wallet = await WalletModel.findByIdAndDelete(walletId);
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async getAllWallets() {
+    return await WalletModel.find().populate("user", "name email role");
+  },
+
+  async getMyWallet(userId: string) {
+    const wallet = await WalletModel.findOne({ user: userId });
+    if (!wallet) throw new AppError(404, "Wallet not found");
+    return wallet;
+  },
+
+  async deposit(userId: string, amount: number) {
+    return withSession(async (session) => {
+      const wallet = await WalletModel.findOne({ user: userId }).session(session);
+      if (!wallet) throw new AppError(404, "Wallet not found");
+      ensureActive(wallet.status);
+
+      wallet.balance += amount;
+      await wallet.save({ session });
+
+      await TransactionModel.create([{
+        type: TransactionType.DEPOSIT,
+        amount,
+        fee: 0,
+        toWallet: wallet._id,
+        initiatedBy: { kind: "USER", user: wallet.user },
+        status: TransactionStatus.COMPLETED,
+        description: "User deposited money",
+        meta: { channel: "SELF_TOPUP" },
+      }], { session });
+
+      return wallet;
+    });
+  },
+
+  async withdraw(userId: string, amount: number) {
+    return withSession(async (session) => {
+      const wallet = await WalletModel.findOne({ user: userId }).session(session);
+      if (!wallet) throw new AppError(404, "Wallet not found");
+      ensureActive(wallet.status);
+
+      const fee = Math.ceil(amount * WITHDRAW_FEE_PERCENT);
+      const totalDebit = amount + fee;
+      if (wallet.balance - totalDebit < MIN_BALANCE) {
+        throw new AppError(400, "Insufficient balance");
+      }
+
+      wallet.balance -= totalDebit;
+      await wallet.save({ session });
+
+      await TransactionModel.create([{
+        type: TransactionType.WITHDRAW,
+        amount,
+        fee,
+        fromWallet: wallet._id,
+        initiatedBy: { kind: "USER", user: wallet.user },
+        status: TransactionStatus.COMPLETED,
+        description: "User withdrew money",
+      }], { session });
+
+      return wallet;
+    });
+  },
+
+  async transfer(fromUserId: string, toUserId: string, amount: number) {
+    if (fromUserId === toUserId) {
+      throw new AppError(400, "Cannot transfer to self");
+    }
+
+    return withSession(async (session) => {
+      const [fromWallet, toWallet] = await Promise.all([
+        WalletModel.findOne({ user: fromUserId }).session(session),
+        WalletModel.findOne({ user: toUserId }).session(session),
+      ]);
+
+      if (!fromWallet) throw new AppError(404, "Sender wallet not found");
+      if (!toWallet) throw new AppError(404, "Receiver wallet not found");
+      ensureActive(fromWallet.status);
+      ensureActive(toWallet.status);
+
+      const fee = Math.ceil(amount * TRANSFER_FEE_PERCENT);
+      const totalDebit = amount + fee;
+      if (fromWallet.balance - totalDebit < MIN_BALANCE) {
+        throw new AppError(400, "Insufficient balance");
+      }
+
+      fromWallet.balance -= totalDebit;
+      toWallet.balance += amount;
+      await Promise.all([
+        fromWallet.save({ session }),
+        toWallet.save({ session }),
+      ]);
+
+      await TransactionModel.create([{
+        type: TransactionType.TRANSFER,
+        amount,
+        fee,
+        fromWallet: fromWallet._id,
+        toWallet: toWallet._id,
+        initiatedBy: { kind: "USER", user: fromWallet.user },
+        status: TransactionStatus.COMPLETED,
+        description: "User transferred money",
+        meta: { toUserId },
+      }], { session });
+
+      return { fromWallet, toWallet };
+    });
+  },
+
+  async agentCashIn(agentId: string, userId: string, amount: number) {
+    return withSession(async (session) => {
+      const wallet = await WalletModel.findOne({ user: userId }).session(session);
+      if (!wallet) throw new AppError(404, "Wallet not found");
+      ensureActive(wallet.status);
+
+      wallet.balance += amount;
+      await wallet.save({ session });
+
+      await TransactionModel.create([{
+        type: TransactionType.CASH_IN,
+        amount,
+        fee: 0,
+        toWallet: wallet._id,
+        initiatedBy: { kind: "AGENT", agent: new mongoose.Types.ObjectId(agentId) },
+        status: TransactionStatus.COMPLETED,
+        description: "Agent cash-in to user",
+      }], { session });
+
+      return wallet;
+    });
+  },
+
+  async agentCashOut(agentId: string, userId: string, amount: number) {
+    return withSession(async (session) => {
+      const wallet = await WalletModel.findOne({ user: userId }).session(session);
+      if (!wallet) throw new AppError(404, "Wallet not found");
+      ensureActive(wallet.status);
+
+      const fee = 0; // Optional: add fee logic
+      const totalDebit = amount + fee;
+      if (wallet.balance - totalDebit < MIN_BALANCE) {
+        throw new AppError(400, "Insufficient balance");
+      }
+
+      wallet.balance -= totalDebit;
+      await wallet.save({ session });
+
+      await TransactionModel.create([{
+        type: TransactionType.CASH_OUT,
+        amount,
+        fee,
+        fromWallet: wallet._id,
+        initiatedBy: { kind: "AGENT", agent: new mongoose.Types.ObjectId(agentId) },
+        status: TransactionStatus.COMPLETED,
+        description: "Agent cash-out from user",
+      }], { session });
+
+      return wallet;
+    });
+  },
 };
