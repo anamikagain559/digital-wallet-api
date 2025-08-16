@@ -92,7 +92,7 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 const createAgent = async (req: Request, res: Response,next:NextFunction) => {
   try {
     const { email, name, password } = req.body;
-console.log(req.user);
+
     // Optional: Only allow certain roles (like SUPER_ADMIN) to create agents
     if (req.user!.role !== Role.ADMIN) {
       throw new AppError(httpStatus.FORBIDDEN, "You are not allowed to create an agent");
