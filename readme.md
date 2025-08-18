@@ -1,45 +1,64 @@
-# 💳 Wallet API (MFS Project)
+# 💳 Digital Wallet API (MFS Project)
 
-A simple **Mobile Financial Service (MFS) / Wallet API** built with **Node.js, Express.js, and MongoDB**.\
-This project provides basic wallet operations such as **create wallet, block/unblock wallet, check balance, and transfer money**.
-
----
-
-## 🚀 Features
-
-- ✅ Create a wallet for a user
-- ✅ Get wallet details
-- ✅ Block & Unblock wallet
-- ✅ Transfer money between users
-- ✅ Check wallet balance
-- ✅ RESTful API design with proper error handling
+A **secure, modular, role-based backend API** for a digital wallet system (like Bkash or Nagad) built with **Node.js, Express.js, and MongoDB**. Users can register, manage wallets, and perform financial operations like add money, withdraw, and send money.
 
 ---
 
-## 🛠️ Tech Stack
+## 🎯 Project Overview
 
-- **Backend:** Node.js, Express.js
-- **Database:** MongoDB (Mongoose / Native Driver)
-- **Authentication (Optional):** JWT
-- **Other Tools:** Nodemon, dotenv, bcryptjs
+- JWT-based login system with **three roles**: admin, user, agent
+- Secure password hashing (bcrypt)
+- Automatic wallet creation for each user and agent (initial balance: ৳50)
+- Role-based access control
+- Full transaction tracking and wallet management
+
+### Features per Role
+
+**Users:**
+
+- Add money (top-up)
+- Withdraw money
+- Send money to other users
+- View transaction history
+
+**Agents:**
+
+- Add money to any user's wallet (cash-in)
+- Withdraw money from any user's wallet (cash-out)
+- View commission history (optional)
+
+**Admins:**
+
+- View all users, agents, wallets, and transactions
+- Block/unblock wallets
+- Approve/suspend agents
+- Set system parameters (optional)
 
 ---
 
-## 📂 Project Structure
+## 🧠 Design Considerations
+
+- **Wallet Management:** Automatically during registration; blocked wallets cannot perform operations.
+- **Transaction Management:** Tracks type, amount, fee, commission, initiator, status (pending → completed → reversed), atomic operations.
+- **Role Representation:** Single User model with `role` field.
+- **Validations & Business Rules:** Insufficient balance, blocked wallets, negative amounts, and non-existent receivers.
+- **API Design:** RESTful endpoints like `/wallets/deposit`, `/transactions/me`, `/wallets/block/:id`.
+
+---
+
+## 📁 Suggested Project Structure
 
 ```
-wallet-api/
-│-- src/
-│   │-- config/         # Database connection, env setup
-│   │-- controllers/    # API logic
-│   │-- models/         # MongoDB models
-│   │-- routes/         # API routes
-│   │-- utils/          # Helpers & middlewares
-│   │-- app.js          # Express app setup
-│   └-- server.js       # Entry point
-│-- .env                # Environment variables
-│-- package.json
-│-- README.md
+src/
+├── modules/
+│   ├── auth/
+│   ├── user/
+│   ├── wallet/
+│   └── transaction/
+├── middlewares/
+├── config/
+├── utils/
+├── app.ts
 ```
 
 ---
@@ -47,28 +66,21 @@ wallet-api/
 ## ⚙️ Installation & Setup
 
 1. Clone the repository
-
    ```bash
    git clone https://github.com/your-username/wallet-api.git
    cd wallet-api
    ```
-
 2. Install dependencies
-
    ```bash
    npm install
    ```
-
-3. Create a `.env` file and add:
-
+3. Create a `.env` file
    ```env
    PORT=5000
    DB_URL=mongodb://127.0.0.1:27017/walletDB
    JWT_SECRET=yourSecretKey
    ```
-
 4. Run the server
-
    ```bash
    npm run dev
    ```
@@ -79,13 +91,13 @@ wallet-api/
 
 ### Wallet
 
-| Method | Endpoint                           | Description                  |
-| ------ | ---------------------------------- | ---------------------------- |
-| POST   | `/api/v1/wallet`                   | Create a new wallet          |
-| GET    | `/api/v1/wallet/:userId`           | Get wallet details by userId |
-| PATCH  | `/api/v1/wallet/block/:walletId`   | Block a wallet               |
-| PATCH  | `/api/v1/wallet/unblock/:walletId` | Unblock a wallet             |
-| GET    | `/api/v1/wallet/balance/:walletId` | Get wallet balance           |
+| Method | Endpoint                           | Description        |
+| ------ | ---------------------------------- | ------------------ |
+| POST   | `/api/v1/wallet`                   | Create a wallet    |
+| GET    | `/api/v1/wallet/:userId`           | Get wallet details |
+| PATCH  | `/api/v1/wallet/block/:walletId`   | Block a wallet     |
+| PATCH  | `/api/v1/wallet/unblock/:walletId` | Unblock a wallet   |
+| GET    | `/api/v1/wallet/balance/:walletId` | Get wallet balance |
 
 ### Transfer
 
@@ -109,16 +121,28 @@ Content-Type: application/json
 
 ---
 
-## 📊 Future Improvements
+## 🧪 Testing & Documentation
 
-- ✅ Add authentication (JWT)
-- ✅ Add transaction history
-- ✅ Add deposit & withdraw endpoints
-- ✅ Add role-based access (Admin/User)
+- Use **Postman** to test all endpoints
+- Create a **screen-recorded demo (5–10 mins)** showing:
+  - Intro (name + project title)
+  - Folder structure
+  - Auth flow (register, login, JWT + roles)
+  - User features (deposit, withdraw, send, history)
+  - Agent features (cash-in, cash-out, commission)
+  - Admin features (view users, block/unblock wallets, approve agents)
+  - API testing in Postman
+
+---
+
+## 🌐 Live & Repository Links
+
+- Live Demo: [https://wallet-api-live.example.com](https://wallet-api-live.example.com)
+- GitHub Repository: [https://github.com/your-username/wallet-api](https://github.com/your-username/wallet-api)
 
 ---
 
 ## 👨‍💻 Author
 
-Developed by **Anamika Gain** 🚀
+Developed by **Anamika Gain**
 
