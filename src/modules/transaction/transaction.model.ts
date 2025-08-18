@@ -15,7 +15,7 @@ export interface ITransaction {
   };
   status: TransactionStatus;
   description?: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

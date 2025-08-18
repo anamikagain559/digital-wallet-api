@@ -14,23 +14,74 @@ import { Role } from "../user/user.interface";
 const router = Router();
 
 
+router.post("/create", checkAuth(Role.ADMIN, Role.USER, Role.AGENT), WalletController.create as unknown as (req: any, res: any) => void);
+router.get(
+  "/me",
+  checkAuth(Role.ADMIN, Role.USER, Role.AGENT),
+  WalletController.me as unknown as (req: any, res: any) => void
+);
 
-router.post("/create", checkAuth(Role.ADMIN, Role.USER, Role.AGENT), WalletController.create);
-router.get("/me", checkAuth(Role.ADMIN, Role.USER, Role.AGENT), WalletController.getMyWallet);
-router.get("/getall", checkAuth(Role.ADMIN), WalletController.getAll);
-router.patch("/block/:id", checkAuth(Role.ADMIN), WalletController.block);
-router.patch("/unblock/:id", checkAuth(Role.ADMIN), WalletController.unblock);
-router.delete("/:id", checkAuth(Role.ADMIN), WalletController.delete);
+router.get(
+  "/getall",
+  checkAuth(Role.ADMIN),
+  WalletController.getAll as unknown as (req: any, res: any) => void
+);
 
+router.patch(
+  "/block/:id",
+  checkAuth(Role.ADMIN),
+  WalletController.block as unknown as (req: any, res: any) => void
+);
 
+router.patch(
+  "/unblock/:id",
+  checkAuth(Role.ADMIN),
+  WalletController.unblock as unknown as (req: any, res: any) => void
+);
 
-router.get("/me", checkAuth(Role.USER, Role.AGENT, Role.ADMIN), WalletController.me);
+router.delete(
+  "/:id",
+  checkAuth(Role.ADMIN),
+  WalletController.delete as unknown as (req: any, res: any) => void
+);
 
-router.post("/deposit", checkAuth(Role.USER), validateRequest(depositSchema), WalletController.deposit);
-router.post("/withdraw", checkAuth(Role.USER), validateRequest(withdrawSchema), WalletController.withdraw);
-router.post("/transfer", checkAuth(Role.USER), validateRequest(transferSchema), WalletController.transfer);
+// User wallet operations
+router.post(
+  "/deposit",
+  checkAuth(Role.USER),
+  validateRequest(depositSchema),
+  WalletController.deposit as unknown as (req: any, res: any) => void
+);
 
-router.post("/agent/cash-in", checkAuth(Role.AGENT), validateRequest(agentCashInSchema), WalletController.agentCashIn);
-router.post("/agent/cash-out", checkAuth(Role.AGENT), validateRequest(agentCashOutSchema), WalletController.agentCashOut);
+router.post(
+  "/withdraw",
+  checkAuth(Role.USER),
+  validateRequest(withdrawSchema),
+  WalletController.withdraw as unknown as (req: any, res: any) => void
+);
+
+router.post(
+  "/transfer",
+  checkAuth(Role.USER),
+  validateRequest(transferSchema),
+  WalletController.transfer as unknown as (req: any, res: any) => void
+);
+
+// Agent wallet operations
+router.post(
+  "/agent/cash-in",
+  checkAuth(Role.AGENT),
+  validateRequest(agentCashInSchema),
+  WalletController.agentCashIn as unknown as (req: any, res: any) => void
+);
+
+router.post(
+  "/agent/cash-out",
+  checkAuth(Role.AGENT),
+  validateRequest(agentCashOutSchema),
+  WalletController.agentCashOut as unknown as (req: any, res: any) => void
+);
+router.delete("/:id", checkAuth(Role.ADMIN), WalletController.delete  as unknown as (req: any, res: any) => void);
+
 
 export const WalletRoutes = router;

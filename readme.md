@@ -138,7 +138,7 @@ Content-Type: application/json
 ## 🌐 Live & Repository Links
 
 - Live Demo: [https://wallet-api-live.example.com](https://wallet-api-live.example.com)
-- GitHub Repository: [https://github.com/your-username/wallet-api](https://github.com/your-username/wallet-api)
+- GitHub Repository: [https://github.com/anamikagain559/digital-wallet-api.git](https://github.com/anamikagain559/digital-wallet-api.git)
 
 ---
 
