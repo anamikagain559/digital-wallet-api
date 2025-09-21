@@ -91,8 +91,10 @@ export const WalletService = {
   },
 
   async deposit(userId: string, amount: number) {
+
     return withSession(async (session) => {
       const wallet = await WalletModel.findOne({ user: userId }).session(session);
+      console.log("Wallet in service:", wallet);
       if (!wallet) throw new AppError(404, "Wallet not found");
       ensureActive(wallet.status);
 

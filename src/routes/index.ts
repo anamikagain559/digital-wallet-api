@@ -4,6 +4,7 @@ import { UserRoutes } from "../modules/user/user.route"
 
 import { WalletRoutes } from "../modules/wallet/wallet.route"
 import  txRouter from "../modules/transaction/transaction.route"
+import { OtpRoutes } from "../modules/otp/otp.route"
 export const router = Router()
 
 const moduleRoutes = [
@@ -22,7 +23,10 @@ const moduleRoutes = [
     {
          path: "/transaction",
         route: txRouter 
-    }
+    }, {
+        path: "/otp",
+        route: OtpRoutes
+    },
 
     // {
     //     path: "/tour",
