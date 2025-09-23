@@ -1,21 +1,45 @@
-import { Request, Response } from "express";
+import { Request as ExRequest, Response } from "express";
 import { TransactionModel } from "./transaction.model";
+import { JwtPayload } from "jsonwebtoken";
+
+interface AuthRequest extends ExRequest {
+  user?: JwtPayload & { userId: string; role: string };
+}
 
 export const TransactionController = {
-  myHistory: async (req: Request, res: Response) => {
-    // Parse query parameters as numbers
+  myHistory: async (req: AuthRequest, res: Response) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
+    const { type, startDate, endDate } = req.query;
 
-    // Check if req.user exists
-    if (!req.user || !(req.user as any).id) {
-      return res.status(401).json({ message: "Unauthorized: User not found in request" });
+    if (!req.user?.userId) {
+      return res.status(401).json({ message: "Unauthorized: User not found" });
     }
-    // Find the wallet for the logged-in user
-    const wallet = await (await import("../wallet/wallet.model")).WalletModel.findOne({ user: (req.user as any).id });
+
+    const { WalletModel } = await import("../wallet/wallet.model");
+    const wallet = await WalletModel.findOne({ user: req.user.userId });
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
 
-    const filter = { $or: [{ fromWallet: wallet._id }, { toWallet: wallet._id }] };
+    // Base filter
+    const filter: any = {
+      $or: [{ fromWallet: wallet._id }, { toWallet: wallet._id }],
+    };
+
+    // Type filter (case-insensitive)
+    if (type) {
+      filter.type = { $regex: new RegExp(`^${type}$`, "i") }; // match regardless of case
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate as string);
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999); // include full end day
+        filter.createdAt.$lte = end;
+      }
+    }
 
     const [items, total] = await Promise.all([
       TransactionModel.find(filter)
@@ -25,6 +49,9 @@ export const TransactionController = {
       TransactionModel.countDocuments(filter),
     ]);
 
-    res.json({ data: items, page, limit, total });
+    res.json({
+      data: items,
+      pagination: { page, limit, total },
+    });
   },
 };

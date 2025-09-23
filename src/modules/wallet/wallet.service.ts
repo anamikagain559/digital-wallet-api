@@ -145,50 +145,61 @@ export const WalletService = {
     });
   },
 
-  async transfer(fromUserId: string, toUserId: string, amount: number) {
-    if (fromUserId === toUserId) {
-      throw new AppError(400, "Cannot transfer to self");
+async transfer(fromUserId: string, toUserId: string, amount: number) {
+  if (fromUserId === toUserId) {
+    throw new AppError(400, "Cannot transfer to self");
+  }
+
+  return withSession(async (session) => {
+    const [fromWallet, toWallet] = await Promise.all([
+      WalletModel.findOne({ user: fromUserId }).session(session),
+      WalletModel.findOne({ user: toUserId }).session(session),
+    ]);
+
+    if (!fromWallet) throw new AppError(404, "Sender wallet not found");
+    if (!toWallet) throw new AppError(404, "Receiver wallet not found");
+
+    ensureActive(fromWallet.status);
+    ensureActive(toWallet.status);
+
+    const fee = Math.ceil(amount * TRANSFER_FEE_PERCENT);
+    const totalDebit = amount + fee;
+
+    if (fromWallet.balance - totalDebit < MIN_BALANCE) {
+      throw new AppError(400, "Insufficient balance");
     }
 
-    return withSession(async (session) => {
-      const [fromWallet, toWallet] = await Promise.all([
-        WalletModel.findOne({ user: fromUserId }).session(session),
-        WalletModel.findOne({ user: toUserId }).session(session),
-      ]);
+    // ✅ Apply changes
+    fromWallet.balance -= totalDebit;
+    toWallet.balance += amount;
 
-      if (!fromWallet) throw new AppError(404, "Sender wallet not found");
-      if (!toWallet) throw new AppError(404, "Receiver wallet not found");
-      ensureActive(fromWallet.status);
-      ensureActive(toWallet.status);
+    // ✅ Save inside the same session
+    await Promise.all([
+      fromWallet.save({ session }),
+      toWallet.save({ session }),
+    ]);
 
-      const fee = Math.ceil(amount * TRANSFER_FEE_PERCENT);
-      const totalDebit = amount + fee;
-      if (fromWallet.balance - totalDebit < MIN_BALANCE) {
-        throw new AppError(400, "Insufficient balance");
-      }
+    // ✅ Transaction must also use session
+    await TransactionModel.create(
+      [
+        {
+          type: TransactionType.TRANSFER,
+          amount,
+          fee,
+          fromWallet: fromWallet._id,
+          toWallet: toWallet._id,
+          initiatedBy: { kind: "USER", user: fromWallet.user },
+          status: TransactionStatus.COMPLETED,
+          description: "User transferred money",
+          meta: { toUserId },
+        },
+      ],
+      { session } // 🔑 VERY IMPORTANT
+    );
 
-      fromWallet.balance -= totalDebit;
-      toWallet.balance += amount;
-      await Promise.all([
-        fromWallet.save({ session }),
-        toWallet.save({ session }),
-      ]);
-
-      await TransactionModel.create([{
-        type: TransactionType.TRANSFER,
-        amount,
-        fee,
-        fromWallet: fromWallet._id,
-        toWallet: toWallet._id,
-        initiatedBy: { kind: "USER", user: fromWallet.user },
-        status: TransactionStatus.COMPLETED,
-        description: "User transferred money",
-        meta: { toUserId },
-      }], { session });
-
-      return { fromWallet, toWallet };
-    });
-  },
+    return { fromWallet, toWallet };
+  });
+},
 
   async agentCashIn(agentId: string, userId: string, amount: number) {
     return withSession(async (session) => {

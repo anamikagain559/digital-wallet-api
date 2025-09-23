@@ -45,7 +45,7 @@ delete: async (req: ExRequest, res: Response) => {
   },
 
   deposit: async (req: AuthRequest, res: Response) => {
-console.log("User in deposit:", req.user);
+
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     const { amount } = req.body;
     const wallet = await WalletService.deposit(req.user.userId, amount);
