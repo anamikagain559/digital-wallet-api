@@ -15,5 +15,8 @@ router.post(
   "/create-agent",validateRequest(createUserZodSchema),checkAuth(Role.ADMIN),
   UserControllers.createAgent
 );
-
+router.get(
+  "/admin-analytics",checkAuth(Role.ADMIN),
+  UserControllers.getAdminAnalytics
+);
 export const UserRoutes = router;

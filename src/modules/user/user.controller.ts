@@ -9,6 +9,7 @@ import { User } from "./user.model";
 import { Role } from "../user/user.interface";
 import AppError from "../../errorHelpers/AppError";
 
+import {TransactionModel} from "../transaction/transaction.model";
 // const createUserFunction = async (req: Response, res: Response) => {
 
 //     const user = await UserServices.createUser(req.body)
@@ -88,7 +89,7 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
         meta: result.meta
     })
 })
-const getMe = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+const getMe = catchAsync(async (req: Request, res: Response) => {
     const decodedToken = req.user as JwtPayload
     const result = await UserServices.getMe(decodedToken.userId);
 
@@ -135,12 +136,54 @@ console.log("req.user", req.user);
     next(error);
   }
 };
+ const getAdminAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Total users (all users except admin maybe)
+    const totalUsers = await User.countDocuments({ role: "user" });
+
+    // Total agents (filtered by role)
+    const totalAgents = await User.countDocuments({ role: "agent" });
+
+    // Total transactions count
+    const totalTransactions = await TransactionModel.countDocuments();
+
+    // Total transaction volume
+    const totalVolume = await TransactionModel.aggregate([
+      { $group: { _id: null, sum: { $sum: "$amount" } } },
+    ]);
+
+    // Transactions grouped by date
+    const transactionsOverTime = await TransactionModel.aggregate([
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+          volume: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalAgents,
+        totalTransactions,
+        totalVolume: totalVolume[0]?.sum || 0,
+        transactionsOverTime,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const UserControllers = {
     createUser,
     getAllUsers,
     updateUser,
     createAgent,
-    getMe
-
+    getMe,
+    getAdminAnalytics 
 }
