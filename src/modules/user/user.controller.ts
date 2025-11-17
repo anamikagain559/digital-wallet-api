@@ -141,7 +141,6 @@ console.log("req.user", req.user);
     // Total users (all users except admin maybe)
     const totalUsers = await User.countDocuments({ role: "user" });
 
-    // Total agents (filtered by role)
     const totalAgents = await User.countDocuments({ role: "agent" });
 
     // Total transactions count

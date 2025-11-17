@@ -16,7 +16,7 @@ router.post(
   UserControllers.createAgent
 );
 router.get(
-  "/admin-analytics",checkAuth(Role.ADMIN),
+  "/admin-analytics",
   UserControllers.getAdminAnalytics
 );
 export const UserRoutes = router;
