@@ -201,28 +201,47 @@ async transfer(fromUserId: string, toUserId: string, amount: number) {
   });
 },
 
-  async agentCashIn(agentId: string, userId: string, amount: number) {
-    return withSession(async (session) => {
-      const wallet = await WalletModel.findOne({ user: userId }).session(session);
-      if (!wallet) throw new AppError(404, "Wallet not found");
-      ensureActive(wallet.status);
+async agentCashIn(agentId: string, userId: string, amount: number) {
+  return withSession(async (session) => {
 
-      wallet.balance += amount;
-      await wallet.save({ session });
+    // 1. Find AGENT wallet
+    const agentWallet = await WalletModel.findOne({ user: agentId }).session(session);
+    if (!agentWallet) throw new AppError(404, "Agent wallet not found");
+    ensureActive(agentWallet.status);
 
-      await TransactionModel.create([{
-        type: TransactionType.CASH_IN,
-        amount,
-        fee: 0,
-        toWallet: wallet._id,
-        initiatedBy: { kind: "AGENT", agent: new mongoose.Types.ObjectId(agentId) },
-        status: TransactionStatus.COMPLETED,
-        description: "Agent cash-in to user",
-      }], { session });
+    // Check if agent has enough balance
+    if (agentWallet.balance < amount) {
+      throw new AppError(400, "Insufficient agent balance");
+    }
 
-      return wallet;
-    });
-  },
+    // 2. Find USER wallet
+    const userWallet = await WalletModel.findOne({ user: userId }).session(session);
+    if (!userWallet) throw new AppError(404, "User wallet not found");
+    ensureActive(userWallet.status);
+
+    // 3. Deduct from Agent wallet
+    agentWallet.balance -= amount;
+    await agentWallet.save({ session });
+
+    // 4. Add to User wallet
+    userWallet.balance += amount;
+    await userWallet.save({ session });
+
+    // 5. Transaction Record
+    await TransactionModel.create([{
+      type: TransactionType.CASH_IN,
+      amount,
+      fee: 0,
+      fromWallet: agentWallet._id,
+      toWallet: userWallet._id,
+      initiatedBy: { kind: "AGENT", agent: new mongoose.Types.ObjectId(agentId) },
+      status: TransactionStatus.COMPLETED,
+      description: "Agent cash-in to user"
+    }], { session });
+
+    return { agentWallet, userWallet };
+  });
+},
 
   async agentCashOut(agentId: string, userId: string, amount: number) {
     return withSession(async (session) => {
