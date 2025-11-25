@@ -4,5 +4,5 @@ import { TransactionController } from "./transaction.controller";
 import { Role } from "../user/user.interface";
 const txRouter = express.Router();
 
-txRouter.get("/me",  checkAuth(Role.USER),  TransactionController.myHistory);
+txRouter.get("/me",  checkAuth(Role.ADMIN, Role.USER, Role.AGENT), TransactionController.myHistory as unknown as (req: any, res: any) => void);
 export default txRouter;

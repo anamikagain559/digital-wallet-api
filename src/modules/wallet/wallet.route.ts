@@ -75,6 +75,10 @@ router.post(
   WalletController.agentCashIn as unknown as (req: any, res: any) => void
 );
 
+
+router.get("/overview", checkAuth(Role.USER,Role.AGENT), WalletController.getOverview as unknown as (req: any, res: any) => void);
+
+
 router.post(
   "/agent/cash-out",
   checkAuth(Role.AGENT),

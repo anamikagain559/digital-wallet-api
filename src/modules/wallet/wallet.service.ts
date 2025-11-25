@@ -243,32 +243,110 @@ async agentCashIn(agentId: string, userId: string, amount: number) {
   });
 },
 
-  async agentCashOut(agentId: string, userId: string, amount: number) {
-    return withSession(async (session) => {
-      const wallet = await WalletModel.findOne({ user: userId }).session(session);
-      if (!wallet) throw new AppError(404, "Wallet not found");
-      ensureActive(wallet.status);
+async agentCashOut(agentId: string, userId: string, amount: number) {
+  return withSession(async (session) => {
 
-      const fee = 0; // Optional: add fee logic
-      const totalDebit = amount + fee;
-      if (wallet.balance - totalDebit < MIN_BALANCE) {
-        throw new AppError(400, "Insufficient balance");
-      }
+   console.log(agentId, userId, amount);
+    const userWallet = await WalletModel.findOne({ user: userId }).session(session);
+    if (!userWallet) throw new AppError(404, "User wallet not found");
+    ensureActive(userWallet.status);
 
-      wallet.balance -= totalDebit;
-      await wallet.save({ session });
+    // 2. Get agent wallet
+    const agentWallet = await WalletModel.findOne({ user: agentId }).session(session);
+    if (!agentWallet) throw new AppError(404, "Agent wallet not found");
+    ensureActive(agentWallet.status);
 
-      await TransactionModel.create([{
+    // 3. Check user balance
+    const fee = 0;
+    const totalDebit = amount + fee;
+
+    if (userWallet.balance < totalDebit) {
+      throw new AppError(400, "Insufficient balance");
+    }
+
+    // 4. Deduct from user
+    userWallet.balance -= totalDebit;
+
+    // 5. Add to agent
+    agentWallet.balance += amount;
+
+    // 6. Save
+    await userWallet.save({ session });
+    await agentWallet.save({ session });
+
+    // 7. Log transaction
+    await TransactionModel.create([
+      {
         type: TransactionType.CASH_OUT,
         amount,
         fee,
-        fromWallet: wallet._id,
+        fromWallet: userWallet._id,
+        toWallet: agentWallet._id,
         initiatedBy: { kind: "AGENT", agent: new mongoose.Types.ObjectId(agentId) },
         status: TransactionStatus.COMPLETED,
-        description: "Agent cash-out from user",
-      }], { session });
+        description: "Agent cash-out from user to agent",
+      }
+    ], { session });
 
-      return wallet;
-    });
-  },
+    return { userWallet, agentWallet };
+  });
+},
+async getOverview(userId: string, role: string) {
+    // 1️⃣ Get wallet
+    const wallet = await WalletModel.findOne({ user: userId });
+    if (!wallet) throw new AppError(404, "Wallet not found");
+
+    // 2️⃣ Aggregate transactions
+    let totalCashIn = 0;
+    let totalCashOut = 0;
+
+    if (role === "AGENT") {
+      // Agent: transactions initiated by agent
+      const cashInAgg = await TransactionModel.aggregate([
+        { $match: { "initiatedBy.agent": new mongoose.Types.ObjectId(userId), type: TransactionType.CASH_IN } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]);
+
+      const cashOutAgg = await TransactionModel.aggregate([
+        { $match: { "initiatedBy.agent": new mongoose.Types.ObjectId(userId), type: TransactionType.CASH_OUT } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]);
+
+      totalCashIn = cashInAgg[0]?.total || 0;
+      totalCashOut = cashOutAgg[0]?.total || 0;
+    } else {
+      // User: transactions where wallet is involved
+      const cashInAgg = await TransactionModel.aggregate([
+        { $match: { toWallet: wallet._id, type: TransactionType.CASH_IN } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]);
+
+      const cashOutAgg = await TransactionModel.aggregate([
+        { $match: { fromWallet: wallet._id, type: TransactionType.CASH_OUT } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]);
+
+      totalCashIn = cashInAgg[0]?.total || 0;
+      totalCashOut = cashOutAgg[0]?.total || 0;
+    }
+
+    // 3️⃣ Latest 10 transactions
+    const recentTransactions = await TransactionModel.find({
+      $or: [
+        { fromWallet: wallet._id },
+        { toWallet: wallet._id },
+        ...(role === "AGENT" ? [{ "initiatedBy.agent": userId }] : []),
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    return {
+      walletBalance: wallet.balance,
+      totalCashIn,
+      totalCashOut,
+      recentTransactions,
+    };
+  }
+
 };

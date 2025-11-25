@@ -1,7 +1,7 @@
 import { Request as ExRequest, Response } from "express";
 import { WalletService } from "./wallet.service";
 import { JwtPayload } from "jsonwebtoken";
-// Create a typed Request for this controller
+
 interface AuthRequest extends ExRequest {
   user: JwtPayload & { userId: string; role: string };
 }
@@ -79,6 +79,18 @@ delete: async (req: ExRequest, res: Response) => {
     const wallet = await WalletService.agentCashOut(req.user.userId, userId, amount);
     res.status(200).json({ success: true, message: "Cash-out successful", data: wallet });
   },
+  getOverview: async (req: AuthRequest, res: Response) =>  {
+    
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const userId = req.user.userId;
+      const role = req.user.role;
+      const overview = await WalletService.getOverview(userId, role);
+      res.status(200).json({
+        success: true,
+        data: overview,
+      });
+    
+    }
 };
 
 
