@@ -119,11 +119,32 @@ const googleCallbackController = catchAsync(async (req: Request, res: Response, 
 
     res.redirect(`${envVars.FRONTEND_URL}/${redirectTo}`)
 })
+export const updateProfile = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
 
+    if (!userId) {
+        throw new AppError(httpStatus.UNAUTHORIZED, "User not authenticated");
+    }
+
+    const updateData = req.body;
+
+    const updatedUser = await AuthServices.updateProfile(userId, updateData);
+
+    if (!updatedUser) {
+        throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    res.status(httpStatus.OK).json({
+        success: true,
+        message: "Profile updated successfully",
+        data: updatedUser,
+    });
+});
 export const AuthControllers = {
     credentialsLogin,
     getNewAccessToken,
     logout,
     resetPassword,
-    googleCallbackController
+    googleCallbackController,
+    updateProfile
 }

@@ -5,4 +5,10 @@ import { Role } from "../user/user.interface";
 const txRouter = express.Router();
 
 txRouter.get("/me",  checkAuth(Role.ADMIN, Role.USER, Role.AGENT), TransactionController.myHistory as unknown as (req: any, res: any) => void);
+txRouter.get(
+  "/",
+ checkAuth(Role.ADMIN, Role.USER, Role.AGENT),
+  TransactionController.getAllTransactions as unknown as (req: any, res: any) => void
+);
+
 export default txRouter;

@@ -10,7 +10,11 @@ router.post("/login", AuthControllers.credentialsLogin)
 router.post("/refresh-token", AuthControllers.getNewAccessToken)
 router.post("/logout", AuthControllers.logout)
 router.post("/reset-password", checkAuth(...Object.values(Role)), AuthControllers.resetPassword)
-
+router.put(
+  "/update-profile",
+  checkAuth(Role.USER, Role.AGENT, Role.ADMIN),
+  AuthControllers.updateProfile
+);
 
 
 router.get("/google", async (req: Request, res: Response, next: NextFunction) => {
