@@ -134,6 +134,32 @@ export const TransactionController = {
       data: items,
       pagination: { page, limit, total },
     });
-  },
+  }, 
+  deleteTransaction: async (req: ExRequest, res: Response) => {
+  try {
+  const { id } = req.params as { id: string }; // ✅ properly typed
+
+    const deleted = await TransactionModel.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Transaction deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete transaction",
+      error: (error as Error).message,
+    });
+  }
+},
+
 
 };

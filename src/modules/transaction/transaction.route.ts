@@ -10,5 +10,9 @@ txRouter.get(
  checkAuth(Role.ADMIN, Role.USER, Role.AGENT),
   TransactionController.getAllTransactions as unknown as (req: any, res: any) => void
 );
-
+txRouter.delete(
+  "/:id",
+  checkAuth(Role.ADMIN), // only admin can delete; modify if needed
+  TransactionController.deleteTransaction as unknown as (req: any, res: any) => void
+);
 export default txRouter;
