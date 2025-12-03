@@ -52,6 +52,8 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
     if (!userId) {
         throw new Error("User ID is required");
     }
+
+    console.log("req.user in controller:", req.user);
     // const token = req.headers.authorization
     // const verifiedToken = verifyToken(token as string, envVars.JWT_ACCESS_SECRET) as JwtPayload
 
@@ -76,19 +78,14 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
     const result = await UserServices.getAllUsers();
 
-    // res.status(httpStatus.OK).json({
-    //     success: true,
-    //     message: "All Users Retrieved Successfully",
-    //     data: users
-    // })
     sendResponse(res, {
         success: true,
-        statusCode: httpStatus.CREATED,
+        statusCode: httpStatus.OK,   // ✅ FIXED
         message: "All Users Retrieved Successfully",
         data: result.data,
         meta: result.meta
-    })
-})
+    });
+});
 const getMe = catchAsync(async (req: Request, res: Response) => {
     const decodedToken = req.user as JwtPayload
     const result = await UserServices.getMe(decodedToken.userId);
@@ -134,6 +131,45 @@ console.log("req.user", req.user);
 
   } catch (error) {
     next(error);
+  }
+
+};
+
+ const blockOrUnblockUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+const { isActive } = req.body || {};
+console.log("isActive", isActive);
+if (isActive === undefined) {
+  return res.status(400).json({
+    success: false,
+    message: "isActive is required"
+  });
+}
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { isActive },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `User status updated to ${isActive}`,
+      data: updatedUser,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update user",
+      error: error.message,
+    });
   }
 };
  const getAdminAnalytics = async (req: Request, res: Response, next: NextFunction) => {
@@ -184,5 +220,6 @@ export const UserControllers = {
     updateUser,
     createAgent,
     getMe,
-    getAdminAnalytics 
+    getAdminAnalytics ,
+    blockOrUnblockUser
 }
