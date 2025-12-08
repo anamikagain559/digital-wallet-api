@@ -37,18 +37,35 @@ exports.TransactionController = void 0;
 const transaction_model_1 = require("./transaction.model");
 exports.TransactionController = {
     myHistory: async (req, res) => {
-        // Parse query parameters as numbers
         const page = Number(req.query.page) || 1;
         const limit = Number(req.query.limit) || 10;
-        // Check if req.user exists
-        if (!req.user || !req.user.id) {
-            return res.status(401).json({ message: "Unauthorized: User not found in request" });
+        const { type, startDate, endDate } = req.query;
+        if (!req.user?.userId) {
+            return res.status(401).json({ message: "Unauthorized: User not found" });
         }
-        // Find the wallet for the logged-in user
-        const wallet = await (await Promise.resolve().then(() => __importStar(require("../wallet/wallet.model")))).WalletModel.findOne({ user: req.user.id });
+        const { WalletModel } = await Promise.resolve().then(() => __importStar(require("../wallet/wallet.model")));
+        const wallet = await WalletModel.findOne({ user: req.user.userId });
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
-        const filter = { $or: [{ fromWallet: wallet._id }, { toWallet: wallet._id }] };
+        // Base filter
+        const filter = {
+            $or: [{ fromWallet: wallet._id }, { toWallet: wallet._id }],
+        };
+        // Type filter (case-insensitive)
+        if (type) {
+            filter.type = { $regex: new RegExp(`^${type}$`, "i") }; // match regardless of case
+        }
+        // Date range filter
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate)
+                filter.createdAt.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999); // include full end day
+                filter.createdAt.$lte = end;
+            }
+        }
         const [items, total] = await Promise.all([
             transaction_model_1.TransactionModel.find(filter)
                 .sort({ createdAt: -1 })
@@ -56,6 +73,95 @@ exports.TransactionController = {
                 .limit(limit),
             transaction_model_1.TransactionModel.countDocuments(filter),
         ]);
-        res.json({ data: items, page, limit, total });
+        res.json({
+            data: items,
+            pagination: { page, limit, total },
+        });
+    },
+    getAllTransactions: async (req, res) => {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+        const { type, status, initiatedBy, minAmount, maxAmount, fromWallet, toWallet, startDate, endDate, search, } = req.query;
+        // Base filter
+        const filter = {};
+        // Type filter (case-insensitive)
+        if (type) {
+            filter.type = { $regex: new RegExp(`^${type}$`, "i") };
+        }
+        // Status filter
+        if (status) {
+            filter.status = { $regex: new RegExp(`^${status}$`, "i") };
+        }
+        // Initiated By filter
+        if (initiatedBy) {
+            filter["initiatedBy.kind"] = { $regex: new RegExp(`^${initiatedBy}$`, "i") };
+        }
+        // Wallet filters
+        if (fromWallet)
+            filter.fromWallet = fromWallet;
+        if (toWallet)
+            filter.toWallet = toWallet;
+        // Amount range
+        if (minAmount || maxAmount) {
+            filter.amount = {};
+            if (minAmount)
+                filter.amount.$gte = Number(minAmount);
+            if (maxAmount)
+                filter.amount.$lte = Number(maxAmount);
+        }
+        // Search via description
+        if (search) {
+            filter.description = { $regex: search, $options: "i" };
+        }
+        // Date range
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate)
+                filter.createdAt.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.createdAt.$lte = end;
+            }
+        }
+        const [items, total] = await Promise.all([
+            transaction_model_1.TransactionModel.find(filter)
+                .populate("fromWallet")
+                .populate("toWallet")
+                .populate("initiatedBy.user")
+                .populate("initiatedBy.agent")
+                .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit),
+            transaction_model_1.TransactionModel.countDocuments(filter),
+        ]);
+        res.json({
+            success: true,
+            data: items,
+            pagination: { page, limit, total },
+        });
+    },
+    deleteTransaction: async (req, res) => {
+        try {
+            const { id } = req.params; // ✅ properly typed
+            const deleted = await transaction_model_1.TransactionModel.findByIdAndDelete(id);
+            if (!deleted) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Transaction not found",
+                });
+            }
+            return res.json({
+                success: true,
+                message: "Transaction deleted successfully",
+            });
+        }
+        catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to delete transaction",
+                error: error.message,
+            });
+        }
     },
 };

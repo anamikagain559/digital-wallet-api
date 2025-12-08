@@ -84,6 +84,7 @@ exports.WalletService = {
     async deposit(userId, amount) {
         return withSession(async (session) => {
             const wallet = await wallet_model_1.WalletModel.findOne({ user: userId }).session(session);
+            console.log("Wallet in service:", wallet);
             if (!wallet)
                 throw new AppError_1.default(404, "Wallet not found");
             ensureActive(wallet.status);
@@ -147,13 +148,17 @@ exports.WalletService = {
             if (fromWallet.balance - totalDebit < wallet_constant_1.MIN_BALANCE) {
                 throw new AppError_1.default(400, "Insufficient balance");
             }
+            // ✅ Apply changes
             fromWallet.balance -= totalDebit;
             toWallet.balance += amount;
+            // ✅ Save inside the same session
             await Promise.all([
                 fromWallet.save({ session }),
                 toWallet.save({ session }),
             ]);
-            await transaction_model_1.TransactionModel.create([{
+            // ✅ Transaction must also use session
+            await transaction_model_1.TransactionModel.create([
+                {
                     type: transaction_constant_1.TransactionType.TRANSFER,
                     amount,
                     fee,
@@ -163,53 +168,138 @@ exports.WalletService = {
                     status: transaction_constant_1.TransactionStatus.COMPLETED,
                     description: "User transferred money",
                     meta: { toUserId },
-                }], { session });
+                },
+            ], { session } // 🔑 VERY IMPORTANT
+            );
             return { fromWallet, toWallet };
         });
     },
     async agentCashIn(agentId, userId, amount) {
         return withSession(async (session) => {
-            const wallet = await wallet_model_1.WalletModel.findOne({ user: userId }).session(session);
-            if (!wallet)
-                throw new AppError_1.default(404, "Wallet not found");
-            ensureActive(wallet.status);
-            wallet.balance += amount;
-            await wallet.save({ session });
+            // 1. Find AGENT wallet
+            const agentWallet = await wallet_model_1.WalletModel.findOne({ user: agentId }).session(session);
+            if (!agentWallet)
+                throw new AppError_1.default(404, "Agent wallet not found");
+            ensureActive(agentWallet.status);
+            // Check if agent has enough balance
+            if (agentWallet.balance < amount) {
+                throw new AppError_1.default(400, "Insufficient agent balance");
+            }
+            // 2. Find USER wallet
+            const userWallet = await wallet_model_1.WalletModel.findOne({ user: userId }).session(session);
+            if (!userWallet)
+                throw new AppError_1.default(404, "User wallet not found");
+            ensureActive(userWallet.status);
+            // 3. Deduct from Agent wallet
+            agentWallet.balance -= amount;
+            await agentWallet.save({ session });
+            // 4. Add to User wallet
+            userWallet.balance += amount;
+            await userWallet.save({ session });
+            // 5. Transaction Record
             await transaction_model_1.TransactionModel.create([{
                     type: transaction_constant_1.TransactionType.CASH_IN,
                     amount,
                     fee: 0,
-                    toWallet: wallet._id,
+                    fromWallet: agentWallet._id,
+                    toWallet: userWallet._id,
                     initiatedBy: { kind: "AGENT", agent: new mongoose_1.default.Types.ObjectId(agentId) },
                     status: transaction_constant_1.TransactionStatus.COMPLETED,
-                    description: "Agent cash-in to user",
+                    description: "Agent cash-in to user"
                 }], { session });
-            return wallet;
+            return { agentWallet, userWallet };
         });
     },
     async agentCashOut(agentId, userId, amount) {
         return withSession(async (session) => {
-            const wallet = await wallet_model_1.WalletModel.findOne({ user: userId }).session(session);
-            if (!wallet)
-                throw new AppError_1.default(404, "Wallet not found");
-            ensureActive(wallet.status);
-            const fee = 0; // Optional: add fee logic
+            console.log(agentId, userId, amount);
+            const userWallet = await wallet_model_1.WalletModel.findOne({ user: userId }).session(session);
+            if (!userWallet)
+                throw new AppError_1.default(404, "User wallet not found");
+            ensureActive(userWallet.status);
+            // 2. Get agent wallet
+            const agentWallet = await wallet_model_1.WalletModel.findOne({ user: agentId }).session(session);
+            if (!agentWallet)
+                throw new AppError_1.default(404, "Agent wallet not found");
+            ensureActive(agentWallet.status);
+            // 3. Check user balance
+            const fee = 0;
             const totalDebit = amount + fee;
-            if (wallet.balance - totalDebit < wallet_constant_1.MIN_BALANCE) {
+            if (userWallet.balance < totalDebit) {
                 throw new AppError_1.default(400, "Insufficient balance");
             }
-            wallet.balance -= totalDebit;
-            await wallet.save({ session });
-            await transaction_model_1.TransactionModel.create([{
+            // 4. Deduct from user
+            userWallet.balance -= totalDebit;
+            // 5. Add to agent
+            agentWallet.balance += amount;
+            // 6. Save
+            await userWallet.save({ session });
+            await agentWallet.save({ session });
+            // 7. Log transaction
+            await transaction_model_1.TransactionModel.create([
+                {
                     type: transaction_constant_1.TransactionType.CASH_OUT,
                     amount,
                     fee,
-                    fromWallet: wallet._id,
+                    fromWallet: userWallet._id,
+                    toWallet: agentWallet._id,
                     initiatedBy: { kind: "AGENT", agent: new mongoose_1.default.Types.ObjectId(agentId) },
                     status: transaction_constant_1.TransactionStatus.COMPLETED,
-                    description: "Agent cash-out from user",
-                }], { session });
-            return wallet;
+                    description: "Agent cash-out from user to agent",
+                }
+            ], { session });
+            return { userWallet, agentWallet };
         });
     },
+    async getOverview(userId, role) {
+        // 1️⃣ Get wallet
+        const wallet = await wallet_model_1.WalletModel.findOne({ user: userId });
+        if (!wallet)
+            throw new AppError_1.default(404, "Wallet not found");
+        // 2️⃣ Aggregate transactions
+        let totalCashIn = 0;
+        let totalCashOut = 0;
+        if (role === "AGENT") {
+            // Agent: transactions initiated by agent
+            const cashInAgg = await transaction_model_1.TransactionModel.aggregate([
+                { $match: { "initiatedBy.agent": new mongoose_1.default.Types.ObjectId(userId), type: transaction_constant_1.TransactionType.CASH_IN } },
+                { $group: { _id: null, total: { $sum: "$amount" } } },
+            ]);
+            const cashOutAgg = await transaction_model_1.TransactionModel.aggregate([
+                { $match: { "initiatedBy.agent": new mongoose_1.default.Types.ObjectId(userId), type: transaction_constant_1.TransactionType.CASH_OUT } },
+                { $group: { _id: null, total: { $sum: "$amount" } } },
+            ]);
+            totalCashIn = cashInAgg[0]?.total || 0;
+            totalCashOut = cashOutAgg[0]?.total || 0;
+        }
+        else {
+            // User: transactions where wallet is involved
+            const cashInAgg = await transaction_model_1.TransactionModel.aggregate([
+                { $match: { toWallet: wallet._id, type: transaction_constant_1.TransactionType.CASH_IN } },
+                { $group: { _id: null, total: { $sum: "$amount" } } },
+            ]);
+            const cashOutAgg = await transaction_model_1.TransactionModel.aggregate([
+                { $match: { fromWallet: wallet._id, type: transaction_constant_1.TransactionType.CASH_OUT } },
+                { $group: { _id: null, total: { $sum: "$amount" } } },
+            ]);
+            totalCashIn = cashInAgg[0]?.total || 0;
+            totalCashOut = cashOutAgg[0]?.total || 0;
+        }
+        // 3️⃣ Latest 10 transactions
+        const recentTransactions = await transaction_model_1.TransactionModel.find({
+            $or: [
+                { fromWallet: wallet._id },
+                { toWallet: wallet._id },
+                ...(role === "AGENT" ? [{ "initiatedBy.agent": userId }] : []),
+            ],
+        })
+            .sort({ createdAt: -1 })
+            .limit(10);
+        return {
+            walletBalance: wallet.balance,
+            totalCashIn,
+            totalCashOut,
+            recentTransactions,
+        };
+    }
 };

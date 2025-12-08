@@ -15,7 +15,7 @@ router.put(
   checkAuth(Role.USER, Role.AGENT, Role.ADMIN),
   AuthControllers.updateProfile
 );
-
+router.post("/change-password", checkAuth(...Object.values(Role)), AuthControllers.changePassword)
 
 router.get("/google", async (req: Request, res: Response, next: NextFunction) => {
     const redirect = req.query.redirect || "/"

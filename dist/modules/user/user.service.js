@@ -68,8 +68,15 @@ const getAllUsers = async () => {
         }
     };
 };
+const getMe = async (userId) => {
+    const user = await user_model_1.User.findById(userId).select("-password");
+    return {
+        data: user
+    };
+};
 exports.UserServices = {
     createUser,
     getAllUsers,
-    updateUser
+    updateUser,
+    getMe
 };

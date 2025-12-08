@@ -6,7 +6,7 @@ import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
 import { UserServices } from "./user.service";
 import { User } from "./user.model";
-import { Role } from "../user/user.interface";
+import { Role, IsActive } from "../user/user.interface";
 import AppError from "../../errorHelpers/AppError";
 
 import {TransactionModel} from "../transaction/transaction.model";
@@ -49,6 +49,7 @@ const createUser = catchAsync(async (req: Request, res: Response) => {
 })
 const updateUser = catchAsync(async (req: Request, res: Response) => {
     const userId = req.params.id;
+    console.log("userId in controller:", userId);
     if (!userId) {
         throw new Error("User ID is required");
     }
@@ -60,6 +61,7 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
     const verifiedToken = req.user;
 
     const payload = req.body;
+    console.log("Payload in controller:", payload);
     const user = await UserServices.updateUser(userId, payload, verifiedToken as JwtPayload)
 
     // res.status(httpStatus.CREATED).json({
@@ -168,16 +170,16 @@ if (isActive === undefined) {
     return res.status(500).json({
       success: false,
       message: "Failed to update user",
-      error: error.message,
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 };
  const getAdminAnalytics = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Total users (all users except admin maybe)
-    const totalUsers = await User.countDocuments({ role: "user" });
-
-    const totalAgents = await User.countDocuments({ role: "agent" });
+    const totalUsers = await User.countDocuments({ role: "USER" });
+console.log("totalUsers", totalUsers);
+    const totalAgents = await User.countDocuments({ role: "AGENT" });
 
     // Total transactions count
     const totalTransactions = await TransactionModel.countDocuments();
@@ -213,6 +215,100 @@ if (isActive === undefined) {
     next(error);
   }
 };
+const approveAgent = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Agent ID is required");
+  }
+
+  const agent = await User.findById(id);
+
+  if (!agent) {
+    throw new AppError(httpStatus.NOT_FOUND, "Agent not found");
+  }
+
+  if (agent.role !== Role.AGENT) {
+    throw new AppError(httpStatus.BAD_REQUEST, "This user is not an agent");
+  }
+
+  // Approve agent
+  agent.isVerified = true;
+  agent.isActive = IsActive.ACTIVE; // Optional but recommended
+  await agent.save();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Agent approved successfully",
+    data: agent,
+  });
+});
+
+const suspendAgent = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Agent ID is required");
+  }
+
+  const agent = await User.findById(id);
+
+  if (!agent) {
+    throw new AppError(httpStatus.NOT_FOUND, "Agent not found");
+  }
+
+  if (agent.role !== Role.AGENT) {
+    throw new AppError(httpStatus.BAD_REQUEST, "This user is not an agent");
+  }
+
+  // Suspend agent
+   agent.isVerified = false;
+  agent.isActive = IsActive.INACTIVE;
+  await agent.save();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Agent suspended successfully",
+    data: agent,
+  });
+});
+const getAdminOverview = async (req: Request, res: Response) => {
+  try {
+    // Count normal users
+    const totalUsers = await User.countDocuments({ role: "user" });
+
+    // Count agents
+    const totalAgents = await User.countDocuments({ role: "agent" });
+
+    // Count transactions
+    const totalTransactions = await TransactionModel.countDocuments();
+
+    // Sum transaction amounts
+    const volumeAgg = await TransactionModel.aggregate([
+      { $group: { _id: null, totalAmount: { $sum: "$amount" } } },
+    ]);
+
+    const totalVolume = volumeAgg[0]?.totalAmount || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalUsers,
+        totalAgents,
+        totalTransactions,
+        totalVolume,
+      },
+    });
+  } catch (error: any) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+    });
+  }
+};
 
 export const UserControllers = {
     createUser,
@@ -221,5 +317,9 @@ export const UserControllers = {
     createAgent,
     getMe,
     getAdminAnalytics ,
-    blockOrUnblockUser
+    blockOrUnblockUser,
+    approveAgent,
+    suspendAgent,
+    getAdminOverview
+
 }

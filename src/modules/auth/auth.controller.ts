@@ -84,6 +84,23 @@ const logout = catchAsync(async (req: Request, res: Response, next: NextFunction
         data: null,
     })
 })
+
+const changePassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+
+    const newPassword = req.body.newPassword;
+    const oldPassword = req.body.oldPassword;
+    const decodedToken = req.user
+
+    await AuthServices.changePassword(oldPassword, newPassword, decodedToken as JwtPayload);
+
+    sendResponse(res, {
+        success: true,
+        statusCode: httpStatus.OK,
+        message: "Password Changed Successfully",
+        data: null,
+    })
+})
+
 const resetPassword = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
 
     const newPassword = req.body.newPassword;
@@ -120,7 +137,7 @@ const googleCallbackController = catchAsync(async (req: Request, res: Response, 
     res.redirect(`${envVars.FRONTEND_URL}/${redirectTo}`)
 })
 export const updateProfile = catchAsync(async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = (req.user as any)?._id;
 
     if (!userId) {
         throw new AppError(httpStatus.UNAUTHORIZED, "User not authenticated");
@@ -128,7 +145,7 @@ export const updateProfile = catchAsync(async (req: Request, res: Response) => {
 
     const updateData = req.body;
 
-    const updatedUser = await AuthServices.updateProfile(userId, updateData);
+    const updatedUser = await (AuthServices as any).updateProfile(userId, updateData);
 
     if (!updatedUser) {
         throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -139,12 +156,13 @@ export const updateProfile = catchAsync(async (req: Request, res: Response) => {
         message: "Profile updated successfully",
         data: updatedUser,
     });
-});
+});         
 export const AuthControllers = {
     credentialsLogin,
     getNewAccessToken,
     logout,
     resetPassword,
     googleCallbackController,
-    updateProfile
+    updateProfile,
+    changePassword
 }

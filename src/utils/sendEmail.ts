@@ -12,9 +12,9 @@ const transporter = nodemailer.createTransport({
         user: "mentor.saminravi@gmail.com",
         pass: "jbfu ptuk rbam ixje"
     },
-    port: "465",
+    port: 465,
     host: "smtp.gmail.com"
-})
+} as nodemailer.TransportOptions)
 
 interface SendEmailOptions {
     to: string,

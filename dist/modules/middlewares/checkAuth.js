@@ -12,7 +12,7 @@ const http_status_codes_1 = __importDefault(require("http-status-codes"));
 const user_interface_1 = require("../user/user.interface");
 const checkAuth = (...authRoles) => async (req, res, next) => {
     try {
-        const accessToken = req.headers.authorization;
+        const accessToken = req.headers.authorization || req.cookies.accessToken;
         if (!accessToken) {
             throw new AppError_1.default(403, "No Token Recieved");
         }

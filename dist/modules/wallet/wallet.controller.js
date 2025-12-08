@@ -73,4 +73,15 @@ exports.WalletController = {
         const wallet = await wallet_service_1.WalletService.agentCashOut(req.user.userId, userId, amount);
         res.status(200).json({ success: true, message: "Cash-out successful", data: wallet });
     },
+    getOverview: async (req, res) => {
+        if (!req.user)
+            return res.status(401).json({ message: "Unauthorized" });
+        const userId = req.user.userId;
+        const role = req.user.role;
+        const overview = await wallet_service_1.WalletService.getOverview(userId, role);
+        res.status(200).json({
+            success: true,
+            data: overview,
+        });
+    }
 };

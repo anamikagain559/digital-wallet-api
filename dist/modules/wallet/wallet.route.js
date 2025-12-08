@@ -20,6 +20,7 @@ router.post("/withdraw", (0, checkAuth_1.checkAuth)(user_interface_1.Role.USER),
 router.post("/transfer", (0, checkAuth_1.checkAuth)(user_interface_1.Role.USER), (0, validateRequest_1.validateRequest)(wallet_validation_1.transferSchema), wallet_controller_1.WalletController.transfer);
 // Agent wallet operations
 router.post("/agent/cash-in", (0, checkAuth_1.checkAuth)(user_interface_1.Role.AGENT), (0, validateRequest_1.validateRequest)(wallet_validation_1.agentCashInSchema), wallet_controller_1.WalletController.agentCashIn);
+router.get("/overview", (0, checkAuth_1.checkAuth)(user_interface_1.Role.USER, user_interface_1.Role.AGENT), wallet_controller_1.WalletController.getOverview);
 router.post("/agent/cash-out", (0, checkAuth_1.checkAuth)(user_interface_1.Role.AGENT), (0, validateRequest_1.validateRequest)(wallet_validation_1.agentCashOutSchema), wallet_controller_1.WalletController.agentCashOut);
 router.delete("/:id", (0, checkAuth_1.checkAuth)(user_interface_1.Role.ADMIN), wallet_controller_1.WalletController.delete);
 exports.WalletRoutes = router;
